@@ -19,6 +19,18 @@ trait TypeParser extends BaseParser {
     typeAtom ^^ { a => ExactType(a :: Nil) }
   }
 
+  protected lazy val singleType: Parser[Type] = {
+    val variadicOrBase = "*" ~> baseType ^^ {
+      case ExactType(atom :: Nil) => RestType(Nil, atom)
+      case other => error(s"Variadic type (*) must be a single type atom, but got $other")
+    } | baseType
+
+    variadicOrBase ~ opt(eolOrNot ~> "->" ~> eolOrNot ~> singleType) ^^ {
+      case p ~ Some(r) => ExactType(FuncTy(p, r) :: Nil)
+      case single ~ None => single
+    }
+  }
+
   protected lazy val tupleType: Parser[Type] => Parser[Type] = { nextLayer =>
     "*" ~> nextLayer ^^ {
       case ExactType(atom :: Nil) => RestType(Nil, atom)

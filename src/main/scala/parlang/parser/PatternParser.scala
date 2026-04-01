@@ -4,8 +4,8 @@ import parlang.ast.*
 
 trait PatternParser extends TypeParser {
   protected lazy val patLiteral: Parser[PatLiteral] =
-    "_" ~> ":" ~> typeParser ^^ DiscardPat.apply |
-    identifier ~ (":" ~> typeParser) ^^ { case id ~ ty => IdPat(id, ty) }
+    "_" ~> ":" ~> singleType ^^ DiscardPat.apply |
+    identifier ~ (":" ~> singleType) ^^ { case id ~ ty => IdPat(id, ty) }
 
   protected lazy val patAtom: Parser[PatAtom] =
     "#" ~> patGroup ^^ TaggedPat.apply | patLiteral
