@@ -4,5 +4,5 @@ libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % 
 
 lazy val root = (project in file("."))
   .settings(
-    name := "MyLang"
+    name := "ParLang"
   )
