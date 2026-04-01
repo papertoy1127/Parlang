@@ -7,7 +7,8 @@ import parlang.runtime.{Interp, ValQuit, Value}
 
 object Repl {
   def run(ctx: Context): Unit = {
-    println("=== PARLang REPL ===")
+    println("Welcome to the PARLang REPL!")
+    println("Type \u001b[36m:q\u001b[0m or \u001b[36mquit\u001b[0m to quit")
 
     val buffer = new StringBuilder()
 
