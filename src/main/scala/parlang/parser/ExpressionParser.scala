@@ -9,7 +9,7 @@ trait ExpressionParser extends LiteralParser with PatternParser {
   protected lazy val scope: Parser[Expression] = "{" ~> eolOrNot ~> repsep(statement, eol) <~ eolOrNot <~ "}" ^^ Scope.apply
 
   protected lazy val lambda: Parser[Lambda] =
-    singleParam ~ opt(eolOrNot ~> "->" ~> eolOrNot ~> typeParser) ~ ("=>" ~> expr) ^^ { case param ~ retTy ~ e => Lambda(param, retTy, e) }
+    singleParam ~ opt(eolOrNot ~> "->" ~> eolOrNot ~> singleType) ~ ("=>" ~> expr) ^^ { case param ~ retTy ~ e => Lambda(param, retTy, e) }
 
   protected lazy val conditional: Parser[Expression] =
     ("if" ~> "(" ~> expr <~ ")" <~ eolOrNot) ~ expr ~ opt(eolOrNot ~> "else" ~> eolOrNot ~> expr) ^^ {

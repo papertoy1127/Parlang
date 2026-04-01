@@ -12,13 +12,13 @@ let (first: Int, *rest: *Int) := (1, 2, 3, 4)
 let addCur(x: Int)(y: Int) -> Int := x + y
 
 // Currying With Lambda
-let addCurLambda := (x: Int) => (y: Int) => x + y
+let addCurLambda: Int -> Int := (x: Int) => (y: Int) => x + y
 
 // Function with a tuple parameter
 let addTup(x: Int, y: Int) -> Int := x + y
 
 // Lambda with a tuple parameter
-let addTupLambda := (x: Int, y: Int) => x + y
+let addTupLambda: Int -> Int := (x: Int, y: Int) => x + y
 
 // addCur(10, 20)     --- Error (Expected single atom, got tuple)
 // addTup 10 20       --- Error (Length mismatch)
