@@ -4,7 +4,7 @@
 
 ## Examples
 
-```par
+```swift
 // Tuple unbinding
 let (first: Int, *rest: *Int) := (1, 2, 3, 4)
 
