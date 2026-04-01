@@ -26,8 +26,14 @@ let addTupLambda := (x: Int, y: Int) => x + y
 (addCur 10 20) = addTup(10, 20)     // true
 
 // Flat tuple
-(1, (2, 3)) = ((1, 2), 3)           // true
+1, (2, 3) = (1, 2), 3               // true
 
 // Tagged tuple
 (1, #(2, 3)) = (#(1, 2), 3)         // false
+
+let head (x: Int, *rest: *Int) -> Int := x
+let tail (x: Int, *rest: *Int) -> Int := rest
+let sum(*nums: *Int) -> Int := len nums ? head nums + sum(tail nums) : 0
+
+sum(1, 2, 3)                        // 6
 ```
