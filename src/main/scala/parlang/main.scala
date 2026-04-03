@@ -18,7 +18,8 @@ import parlang.error.ParError
     .bindVar("!=", Type.single(FuncTy(Type.Exact(List(IntTy(), IntTy())), Type.single(BoolTy()))), BuiltinBase).toOption.get._1
 
   // --- 2. 테스트 헬퍼 함수 ---
-  def runTest(name: String, code: String): Unit = {
+  def runTest(name: String, rawCode: String): Unit = {
+    val code = rawCode.split("\n").map(_.stripLeading()).mkString("\n")
     println(s"\n--- [Test Case: $name] ---")
     try {
       val astList = Parser.parseProgram(code)

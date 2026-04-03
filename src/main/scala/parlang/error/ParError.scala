@@ -6,9 +6,41 @@ import scala.util.parsing.input.Position
 
 sealed trait ParError {
   def message: String
+
+  protected def errorName: String =
+    this.getClass.getSimpleName //.replaceAll("([a-z])([A-Z]+)", "$1 $2")
+
   protected def format(msg: String, pos: Position): String = {
-    if (pos == null || pos.line == 0) msg
-    else s"[Line ${pos.line}, Column ${pos.column}] $msg\n${pos.longString}"
+    val header = s"[$errorName] $msg\n"
+    if (pos == null || pos.line <= 0) header
+    else {
+      val indentedCode = pos.longString.replace("\n", "\n    ")
+      s"$header+-- At ${pos.line}:${pos.column}\n    $indentedCode\n"
+    }
+  }
+
+  protected def formatTypeMismatch(expectedTy: String, providedTy: String, expectPos: Position, providePos: Position): String = {
+    val header = s"[$errorName]\n"
+    val comparison = s"Expected : $expectedTy\nProvided : $providedTy\n"
+
+
+    def buildProvided(pos: Position): String = {
+      if (pos == null || pos.line <= 0) ""
+      else {
+        val indentedCode = pos.longString.replace("\n", "\n    ")
+        s"+-- Provided at ${pos.line}:${pos.column}\n    $indentedCode\n"
+      }
+    }
+
+    def buildExpected(pos: Position): String = {
+      if (pos == null || pos.line <= 0) ""
+      else {
+        val indentedCode = pos.longString.replace("\n", "\n    ")
+        s"+-- Expected at ${pos.line}:${pos.column}\n|   $indentedCode\n"
+      }
+    }
+
+    header + comparison + buildProvided(providePos) + (if (providePos == expectPos) "" else buildExpected(expectPos))
   }
 }
 
@@ -24,25 +56,24 @@ case class AmbiguousLookupError(id: String, node: Ast) extends ParError {
   override def message: String = format(s"ambiguous identifier: $id", node.pos)
 }
 
-case class TypeMismatchError(expected: Type, provided: Type) extends ParError {
-  override def message: String =
-    format(s"provided $provided is not a subtype of expected $expected", provided.pos)
+case class TypeMismatchError(expected: Type, provided: Type, node: Ast) extends ParError {
+  override def message: String = formatTypeMismatch(expected.toString, provided.toString, expected.pos, node.pos)
 }
 
 case class UnknownTypeBindingError(id: String, ty: Type, node: Ast) extends ParError {
   override def message: String = format(s"cannot bind unknown type $ty to identifier $id", node.pos)
 }
 
-case class PatternMismatchError(expectedPat: Pattern, provided: Type) extends ParError {
-  override def message: String = format(s"expected $expectedPat, but got $provided", provided.pos)
+case class PatternMismatchError(expectedPat: Pattern, provided: Type, node: Ast) extends ParError {
+  override def message: String = formatTypeMismatch(expectedPat.toString, provided.toString, expectedPat.pos, node.pos)
 }
 
 case class PatternShapeMismatchError(node: Ast) extends ParError {
   override def message: String = format("pattern and type structure mismatch", node.pos)
 }
 
-case class EndOfPatternError(expectedTail: AbsurdTail, provided: Type) extends ParError {
-  override def message: String = format(s"expected end of pattern, but got $provided", provided.pos)
+case class EndOfPatternError(expectedTail: AbsurdTail, provided: Type, node: Ast) extends ParError {
+  override def message: String = formatTypeMismatch("∅ (End of Tuple)", provided.toString, null, node.pos)
 }
 
 case class VariadicSegmentError(id: String, provided: Type, node: Ast) extends ParError {

@@ -17,53 +17,50 @@ object TypeChecker {
       case _ => Left(ComplexValueInferenceError(v, node))
     }.map(tList => Type.of(tList, NothingTy()).at(node))
   }
-
-  private def unifyAtom(provided: TypeAtom, expected: TypeAtom): Either[ParError, TypeAtom] = (provided, expected) match {
-    case (UnknownTy(), e) => Right(e.at(provided))
+  
+  private def unifyAtom(provided: TypeAtom, expected: TypeAtom, node: Ast): Either[ParError, TypeAtom] = (provided, expected) match {
+    case (UnknownTy(), e) => Right(e)
     case (p, UnknownTy()) => Right(p)
 
     case (FuncTy(pProv, rProv), FuncTy(pExp, rExp)) =>
       for {
-        uniParam <- unify(pProv, pExp)
-        uniRet   <- unify(rProv, rExp)
-      } yield FuncTy(uniParam, uniRet).at(provided)
+        uniParam <- unify(pProv, pExp, node)
+        uniRet   <- unify(rProv, rExp, node)
+      } yield FuncTy(uniParam, uniRet).at(node)
 
     case (TaggedTy(tProv), TaggedTy(tExp)) =>
-      unify(tProv, tExp).map(ty => TaggedTy(ty).at(provided))
+      unify(tProv, tExp, node).map(ty => TaggedTy(ty).at(node))
 
     case _ =>
       if (!provided.isSubAt(expected))
-        Left(TypeMismatchError(
-          Type.single(expected).at(expected),
-          Type.single(provided).at(provided)
-        ))
-      else Right(expected.at(provided))
+        Left(TypeMismatchError(Type.single(expected), Type.single(provided), node))
+      else Right(expected)
   }
 
-  private def unify(provided: Type, expected: Type): Either[ParError, Type] = (provided, expected) match {
+  private def unify(provided: Type, expected: Type, node: Ast): Either[ParError, Type] = (provided, expected) match {
     case (Type(p1, r1), Type(p2, r2)) if p1.length >= p2.length =>
       for {
-        uniPrefix <- p1.take(p2.length).zip(p2).traverse { case (prov, exp) => unifyAtom(prov, exp) }
-        inferredExtra <- p1.drop(p2.length).traverse(unifyAtom(_, r2))
-        uniRest <- unifyAtom(r1, r2)
+        uniPrefix <- p1.take(p2.length).zip(p2).traverse { case (prov, exp) => unifyAtom(prov, exp, node) }
+        inferredExtra <- p1.drop(p2.length).traverse(unifyAtom(_, r2, node))
+        uniRest <- unifyAtom(r1, r2, node)
       } yield {
         val res = if (r2.isKnown) Type.of(uniPrefix, uniRest)
         else Type.of(uniPrefix ++ inferredExtra, uniRest)
-        res.at(provided)
+        res.at(node)
       }
 
-    case _ => Left(TypeMismatchError(expected, provided))
+    case _ => Left(TypeMismatchError(expected, provided, node))
   }
 
   private def bindAtom(pat: SinglePatAtom, tat: TypeAtom, env: TypeEnv): Either[ParError, (TypeEnv, TypedSinglePatAtom)] = pat match {
     case IdPat(id, chkTy) =>
       for {
-        uniTy <- unifyAtom(tat, chkTy)
+        uniTy <- unifyAtom(tat, chkTy, pat)
         (newEnv, info) <- env.bindVar(id, Type.single(uniTy).at(pat), pat)
       } yield (newEnv, TypedIdPat(id, info.resolvedName, uniTy))
 
     case WildcardPat(chkTy) =>
-      unifyAtom(tat, chkTy).map { uniTy => (env, TypedWildcardPat(uniTy)) }
+      unifyAtom(tat, chkTy, pat).map { uniTy => (env, TypedWildcardPat(uniTy)) }
 
     case tagged @ TaggedPat(innerPat) =>
       tat match {
@@ -71,13 +68,13 @@ object TypeChecker {
           bind(innerPat, innerTy, env).map { case (nextEnv, typedInner) =>
             (nextEnv, TypedTaggedPat(typedInner, TaggedTy(typedInner.ty).at(tagged)))
           }
-        case prov => Left(PatternMismatchError(Pattern.single(tagged).at(tagged), Type.single(prov).at(prov)))
+        case prov => Left(PatternMismatchError(Pattern.single(tagged), Type.single(prov), tagged))
       }
   }
 
   private def bindVariadicAtom(pat: VariadicPatAtom, ty: Type.Exact, env: TypeEnv): Either[ParError, (TypeEnv, TypedVariadicPatAtom)] = pat match {
     case VarIdPat(id, expected) =>
-      unify(ty, expected).flatMap {
+      unify(ty, expected, pat).flatMap {
         case t @ Type(p, NothingTy()) =>
           val exactTy = Type.Exact(p).at(t)
           env.bindVar(id, exactTy, pat).map { case (newEnv, info) =>
@@ -87,27 +84,29 @@ object TypeChecker {
       }
 
     case VarWildcardPat(expected) =>
-      unify(ty, expected).map { case uniTy: Type.Exact => (env, TypedVarWildcardPat(uniTy)) }
+      unify(ty, expected, pat).map { case uniTy: Type.Exact => (env, TypedVarWildcardPat(uniTy)) }
   }
 
   private def bindTail(pat: PatTail, ty: Type, env: TypeEnv): Either[ParError, (TypeEnv, TypedPatTail)] = (pat, ty) match {
     case (IdTail(id, chkTy), _) =>
       for {
-        uniTy <- unify(ty, chkTy.at(pat))
+        uniTy <- unify(ty, chkTy.at(pat), pat)
         (nextEnv, info) <- env.bindVar(id, uniTy, pat)
       } yield (nextEnv, TypedIdTail(id, info.resolvedName, uniTy))
 
     case (WildcardTail(chkTy), _) =>
-      unify(ty, chkTy.at(pat)).map { uniTy => (env, TypedWildcardTail(uniTy)) }
+      unify(ty, chkTy.at(pat), pat).map { uniTy =>
+        (env, TypedWildcardTail(uniTy))
+      }
 
     case (eop: AbsurdTail, _) =>
       if (ty == Type.unit) Right((env, TypedAbsurdTail))
-      else Left(EndOfPatternError(eop, ty))
+      else Left(EndOfPatternError(eop, ty, pat))
   }
 
   def bind(binder: Pattern, dataTy: Type, env: TypeEnv): Either[ParError, (TypeEnv, TypedPattern)] = {
     for {
-      refinedTy <- unify(dataTy, binder.typeConstraint).map(_.at(binder))
+      refinedTy <- unify(dataTy, binder.typeConstraint, binder).map(_.at(binder))
       result <- (binder, refinedTy) match {
         case (Pattern(pPats, rPat), Type(pData, rData)) =>
           for {
@@ -209,18 +208,21 @@ object TypeChecker {
     case Literal(v) =>
       for {
         inf <- inferValueType(v, expr)
-        ref <- unify(inf, expected)
+        ref <- unify(inf, expected, expr)
       } yield TypedLiteral(v, ref.at(expr))
 
-    case Identifier(id) => {
+    case Identifier(id) =>
       val lookup = env.lookup(id)
-      lookup.collect(sy => unify(sy.ty.at(expr), expected) match { case Right(ty) => (sy, ty) }) match {
-        case Nil if lookup.isEmpty => Left(LookupError(id, expr))
-        case Nil => Left(TypeMismatchError(expected, lookup.head.ty.at(expr)))
-        case (rSy, rTy) :: Nil => Right(TypedIdentifier(id, rSy.resolvedName, rTy.at(expr)))
-        case _ => Left(AmbiguousLookupError(id, expr))
+      if (lookup.isEmpty) Left(LookupError(id, expr))
+      else {
+        val unifications = lookup.map(sy => (sy, unify(sy.ty, expected, expr)))
+        val successes = unifications.collect { case (sy, Right(ty)) => (sy, ty) }
+        successes match {
+          case Nil => Left(TypeMismatchError(expected, lookup.head.ty, expr))
+          case (rSy, rTy) :: Nil => Right(TypedIdentifier(id, rSy.resolvedName, rTy.at(expr)))
+          case _ => Left(AmbiguousLookupError(id, expr))
+        }
       }
-    }
 
     case Scope(stmts) =>
       stmts.dropRight(1).foldLeftM(env.enterScope(), Chain.empty[TypedStmt]) {
@@ -269,10 +271,10 @@ object TypeChecker {
     case Lambda(param, retTy, body) =>
       val thisTy = Type.single(FuncTy(param.typeConstraint, retTy).at(expr)).at(expr)
       for {
-        unifiedTy <- unify(thisTy, expected)
+        unifiedTy <- unify(thisTy, expected, expr)
         extractedTy <- unifiedTy match {
           case Type(FuncTy(refParTy, refRetTy) :: Nil, NothingTy()) => Right((refParTy, refRetTy))
-          case other => Left(TypeMismatchError(expected, other))
+          case other => Left(TypeMismatchError(expected, other, expr))
         }
         (refParTy, refRetTy) = extractedTy
         (boundEnv, typedPat) <- bind(param, refParTy, env.enterScope())
@@ -305,7 +307,7 @@ object TypeChecker {
         val exprList = typedExprs.toList
         for {
           combinedType <- exprList.foldLeftM(Type.unit.at(expr): Type) { (accTy, tExpr) => concatTypes(accTy, tExpr.ty, expr) }
-          finalTy <- unify(combinedType, expected)
+          finalTy <- unify(combinedType, expected, expr)
         } yield TypedTuple(exprList, finalTy)
       }
 
@@ -323,10 +325,10 @@ object TypeChecker {
         typedCond <- checkExpr(cond, env, Type.single(BoolTy()).at(cond))
         typedThen <- checkExpr(thenExpr, env, expected)
         typedElse <- checkExpr(elseExpr, env, expected)
-        mergedTy <- unify(typedThen.ty, typedElse.ty)
-          .orElse(unify(typedElse.ty, typedThen.ty))
+        mergedTy <- unify(typedThen.ty, typedElse.ty, expr)
+          .orElse(unify(typedElse.ty, typedThen.ty, expr))
           .left.flatMap(_ => Left(IncompatibleBranchesError(typedThen.ty, typedElse.ty, expr)))
-        finalTy <- unify(mergedTy, expected)
+        finalTy <- unify(mergedTy, expected, expr)
       } yield TypedConditional(typedCond, typedThen, typedElse, finalTy)
   }
 }
