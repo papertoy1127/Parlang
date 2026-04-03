@@ -2,6 +2,6 @@
 <project version="4">
   <component name="ScalaCompilerConfiguration">
     <option name="separateProdTestSources" value="true" />
-    <profile name="sbt 1" modules="MyLang,MyLang.main,MyLang.main~1,MyLang.test,MyLang.test~1" />
+    <profile name="sbt 1" modules="MyLang,MyLang.main,MyLang.main~1,MyLang.test,MyLang.test~1,ParLang,ParLang.main~1,ParLang.test~1" />
   </component>
 </project>

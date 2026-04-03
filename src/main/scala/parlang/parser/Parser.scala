@@ -9,7 +9,9 @@ object Parser extends StatementParser {
   def parseProgram(input: String): List[Statement] = {
     parseAll(program, input) match {
       case Success(result, _) => result
-      case failure: NoSuccess => error(failure.msg)
+      case NoSuccess(msg, next) =>
+        val errorMsg = s"[Line ${next.pos.line}, Column ${next.pos.column}] Syntax Error: \n$msg\n${next.pos.longString}"
+        throw new Exception(errorMsg)
     }
   }
 

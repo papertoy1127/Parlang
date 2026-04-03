@@ -1,8 +1,13 @@
+
 package parlang.runtime
 
 import parlang.ast.*
 
+val Interp = ???
+
+/*
 object Interp {
+  private type ValEnv = Map[String, Value]
   def error(str: String): Nothing = throw Exception(s"[Interpretation Error] $str")
   private def truth(v: Value): Option[Boolean] = v.elems match {
     case Nil => Some(false)
@@ -13,7 +18,7 @@ object Interp {
     case _ => None
   }
 
-  def bind(binder: Pattern, value: Value, env: Map[String, Value]): Map[String, Value] = binder match {
+  def bind(binder: Pattern, value: Value, env: ValEnv): ValEnv = binder match {
     case ExactPattern(elems) =>
       if (elems.length != value.elems.length) error("Unmatched pattern length")
       elems.zip(value.elems).foldLeft(env) { case (acc, (pat, vat)) => bindAtom(pat, vat, acc) }
@@ -23,19 +28,19 @@ object Interp {
       val (prefixVals, restVals) = value.elems.splitAt(elems.length)
       val prefixEnv = elems.zip(prefixVals).foldLeft(env) { case (acc, (pat, vat)) => bindAtom(pat, vat, acc) }
       rest match {
-        case DiscardPat(_) => prefixEnv
+        case WildcardPat(_) => prefixEnv
         case IdPat(id, _) => prefixEnv + (id -> Value(restVals))
       }
   }
 
-  private def bindAtom(pat: PatAtom, vat: ValAtom, env: Map[String, Value]): Map[String, Value] = (pat, vat) match {
+  private def bindAtom(pat: PatAtom, vat: ValAtom, env: ValEnv): ValEnv = (pat, vat) match {
     case (IdPat(id, _), _) => env + (id -> Value.singular(vat))
-    case (DiscardPat(_), _) => env
+    case (WildcardPat(_), _) => env
     case (TaggedPat(innerPat), ValueTagged(innerVal)) => bind(innerPat, innerVal, env)
     case _ => error(s"Unmatched atom: expected $pat but got $vat")
   }
 
-  def interp(stmt: Statement, env: Map[String, Value]): (Map[String, Value], Option[Value]) = stmt match {
+  def interp(stmt: Statement, env: ValEnv): (ValEnv, Option[Value]) = stmt match {
     case expr: Expression => (env, Some(evaluate(expr, env)))
     case Variable(binder, expr) => (bind(binder, evaluate(expr, env), env), None)
     case FuncRec(id, params, _, body) =>
@@ -57,7 +62,7 @@ object Interp {
     }
   }
 
-  private def evaluate(expr: Expression, env: Map[String, Value]): Value = expr match {
+  private def evaluate(expr: Expression, env: ValEnv): Value = expr match {
     case Literal(v) => v
 
     case OperatorUnary(op, operand) =>
@@ -118,6 +123,7 @@ object Interp {
 
       res.getOrElse(Value.Unit)
     case Lambda(param, _, expr) => Value.singular(ValueClosure(param, expr, env))
+    
     case Call(expr, arg) => evaluate(expr, env).elems match {
       case ValueClosure(param, body, closureEnv) :: Nil => evaluate(body, bind(param, evaluate(arg, env), closureEnv))
       case (rec @ ValueRecClosure(id, param, body, closureEnv)) :: Nil => evaluate(body, bind(param, evaluate(arg, env), closureEnv) + (id -> Value.singular(rec)))
@@ -137,3 +143,5 @@ object Interp {
   }
 }
 
+
+ */

@@ -3,64 +3,63 @@ package parlang.parser
 import parlang.ast.*
 
 trait TypeParser extends BaseParser {
-  protected lazy val typeAtom: Parser[TypeAtom] =
-    "#" ~> baseType ^^ { t => TaggedTy(t) } |
-    identifier ^^ {
-      case "Int" => IntTy
-      case "Bool" => BoolTy
-      case "Char" => CharTy
-      case "String" => StringTy
-      case typeId => error(s"Unknown type or custom type not yet supported: $typeId")
-    }
-
-  protected lazy val baseType: Parser[Type] = {
-    "(" ~ eolOrNot ~ ")" ^^^ ExactType(Nil) |
-    "(" ~> eolOrNot ~> typeParser <~ eolOrNot <~ ")" |
-    typeAtom ^^ { a => ExactType(a :: Nil) }
+  protected lazy val typeLiteral: Parser[TypeAtom] = positioned {
+    "#" ~> tupleType(typeAtom) ^^ TaggedTy.apply |
+      "?" ^^^ UnknownTy() |
+      identifier ^^ {
+        case "Int" => IntTy()
+        case "Bool" => BoolTy()
+        case "Char" => CharTy()
+        case "String" => StringTy()
+        case id => error(s"Unknown type: $id")
+      }
   }
 
-  protected lazy val singleType: Parser[Type] = {
-    val variadicOrBase = "*" ~> baseType ^^ {
-      case ExactType(atom :: Nil) => RestType(Nil, atom)
-      case other => error(s"Variadic type (*) must be a single type atom, but got $other")
-    } | baseType
-
-    variadicOrBase ~ opt(eolOrNot ~> "->" ~> eolOrNot ~> singleType) ^^ {
-      case p ~ Some(r) => ExactType(FuncTy(p, r) :: Nil)
-      case single ~ None => single
-    }
+  protected lazy val tailType: Parser[Type] = positioned("*" ~> typeAtom ^^ Type.rep)
+  protected lazy val typeBase: Parser[Type] = positioned {
+    typeLiteral ^^ Type.single |
+      "(" ~> eolOrNot ~> typeParser <~ eolOrNot <~ ")"
   }
 
-  protected lazy val tupleType: Parser[Type] => Parser[Type] = { nextLayer =>
-    "*" ~> nextLayer ^^ {
-      case ExactType(atom :: Nil) => RestType(Nil, atom)
-      case other => error(s"Variadic type (*) must be a single type atom, but got $other")
+  protected lazy val typeAtom: Parser[TypeAtom] = positioned {
+    typeBase ~ opt("->" ~> typeParser) ^^ {
+      case tPar ~ None =>
+        tPar match {
+          case Type.Exact(List(atom)) => atom
+          case _ => error(s"Tuple type cannot be used as a single TypeAtom: $tPar")
+        }
+      case tPar ~ Some(tRes) => FuncTy(tPar, tRes)
     } |
-    rep1sep(nextLayer, eolOrNot ~> "," <~ eolOrNot) ~ opt(eolOrNot ~> "," ~> eolOrNot ~> "*" ~> nextLayer) ^^ {
-      case types ~ optRest =>
-        val flatPrefix = types.flatMap {
-          case ExactType(elems) => elems
-          case RestType(_, _) => error("Variadic type (*) can only appear at the end of a tuple type")
-        }
-        optRest match {
-          case Some(ExactType(List(variadicAtom))) => RestType(flatPrefix, variadicAtom)
-          case Some(other) => error(s"Variadic type (*) must be a single type atom, but got $other")
-          case None => ExactType(flatPrefix)
-        }
-    }
+      typeLiteral
   }
 
-  protected lazy val funcType: Parser[Type] => Parser[Type] = { nextLayer =>
-    nextLayer ~ opt(eolOrNot ~> "->" ~> eolOrNot ~> typeParser) ^^ {
-      case p ~ Some(r) => ExactType(FuncTy(p, r) :: Nil)
-      case single ~ None => single
+  protected lazy val exactTupleType: Parser[TypeAtom] => Parser[Type.Exact] =
+    nextLayer => positioned {
+      nextLayer ^^ Type.single |
+        "(" ~> eolOrNot ~> repsep(nextLayer | exactTupleType(nextLayer) ^^ { t => t.prefix.head }, ",") <~ opt(",") <~ eolOrNot <~ ")" ^^ {
+          t => Type.Exact(Nil)
+        }
     }
-  }
 
-  protected val typeLayers: List[Parser[Type] => Parser[Type]] =
-    tupleType ::
-    funcType ::
-    Nil
+  protected lazy val restTupleType: Parser[TypeAtom] => Parser[Type] =
+    nextLayer => positioned {
+      "(" ~> eolOrNot ~> rep((nextLayer | exactTupleType(nextLayer).map(_.prefix.head)) <~ ",") ~ restTupleType(nextLayer) <~ eolOrNot <~ ")"
+        ^^ { case tList ~ tRest => Type.of(tList ++ tRest.prefix, tRest.rest) } |
+        tailType
+    }
 
-  protected lazy val typeParser: Parser[Type] = typeLayers.foldLeft(baseType) { (p, layerFunc) => layerFunc(p) }
+  protected lazy val tupleType: Parser[TypeAtom] => Parser[Type] = nextLayer =>
+    positioned {
+      "(" ~> eolOrNot ~> (
+        rep( (nextLayer | exactTupleType(nextLayer).map(_.prefix.head)) <~ "," ) ~ restTupleType(nextLayer) ^^ {
+          case pref ~ ty => Type.of(pref ++ ty.prefix, ty.rest)
+        } |
+          repsep(nextLayer | exactTupleType(nextLayer).map(_.prefix.head), ",") ^^ {
+            parts => Type.Exact(parts)
+          }
+        ) <~ eolOrNot <~ ")" |
+        nextLayer ^^ Type.single
+    }
+
+  protected lazy val typeParser: Parser[Type] = tupleType(typeAtom)
 }

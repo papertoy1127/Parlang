@@ -19,19 +19,21 @@ trait LiteralParser extends BaseParser {
     escapeRegex.replaceAllIn(s, m => unescape(m.matched.charAt(1)).toString)
   }
 
-  protected def stringLiteral: Parser[Expression] =
+  protected def stringLiteral: Parser[Expression] = positioned {
     """"([^"\\]|\\.)*"""".r ^^ { s =>
-    val content = s.substring(1, s.length - 1)
-    Literal(Value.singular(ValueString(decode(content))))
+      val content = s.substring(1, s.length - 1)
+      Literal(Value.singular(ValueString(decode(content))))
+    }
   }
 
-  protected def charLiteral: Parser[Expression] =
+  protected def charLiteral: Parser[Expression] = positioned {
     """'([^'\\]|\\.)'""".r ^^ { s =>
       val content = s.substring(1, s.length - 1)
       Literal(Value.singular(ValueChar(decode(content).charAt(0))))
     }
+  }
 
-  protected lazy val valueLiteral: Parser[Expression] = {
+  protected lazy val valueLiteral: Parser[Expression] = positioned {
     charLiteral | stringLiteral |
     """\d+""".r ^^ { s => Literal(Value(ValueNum(BigInt(s)) :: Nil)) } |
     "true" ^^^ Literal(Value(ValueBool(true) :: Nil)) |

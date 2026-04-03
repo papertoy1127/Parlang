@@ -1,3 +1,4 @@
+/*
 package parlang
 
 import parlang.ast.*
@@ -26,3 +27,4 @@ class Context(initialEnv: Map[String, Value] = StdLib.env) {
     }
   }
 }
+*/
