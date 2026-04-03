@@ -11,7 +11,7 @@ trait ExpressionParser extends LiteralParser with PatternParser {
   }
 
   protected lazy val lambda: Parser[Lambda] = positioned {
-    patGroup ~ opt(eolOrNot ~> "->" ~> eolOrNot ~> typeParser) ~ ("=>" ~> expr) ^^ {
+    pattern ~ opt(eolOrNot ~> "->" ~> eolOrNot ~> typeParser) ~ ("=>" ~> expr) ^^ {
       case param ~ retTy ~ e => Lambda(param, retTy.getOrElse(Type.single(UnknownTy())), e)
     }
   }

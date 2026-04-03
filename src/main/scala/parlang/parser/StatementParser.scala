@@ -8,7 +8,7 @@ trait StatementParser extends ExpressionParser {
   }
 
   protected lazy val funcDec: Parser[FuncRec] = positioned {
-    "let" ~> identifier ~ rep1(patGroup) ~ (eolOrNot ~> "->" ~> eolOrNot ~> typeParser) ~ (":=" ~> expr)
+    "let" ~> identifier ~ rep1(pattern) ~ (eolOrNot ~> "->" ~> eolOrNot ~> typeParser) ~ (":=" ~> expr)
       ^^ { case id ~ params ~ retTy ~ e => FuncRec(id, params, retTy, e) }
   }
 

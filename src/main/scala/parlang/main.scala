@@ -22,6 +22,7 @@ import parlang.error.ParError
     println(s"\n--- [Test Case: $name] ---")
     try {
       val astList = Parser.parseProgram(code)
+      println(astList)
       val result = astList.foldLeft[Either[ParError, (TypeEnv, List[TypedStmt])]](Right((initialEnv, Nil))) {
         case (Right((currEnv, acc)), stmt) =>
           TypeChecker.check(stmt, currEnv).map { case (nextEnv, typed) => (nextEnv, acc :+ typed) }
@@ -78,7 +79,7 @@ import parlang.error.ParError
   // 시나리오 5: 중첩 튜플 평탄화 (Flattening)
   runTest("Tuple Flattening", """
     let ((a, b), c, (d, *e: *Int)) := (1, 2, 3, 4, 5, 6)
-    let flattened_all := (a, b, c, d, e)
+    let *flattened_all := (a, b, c, d, e)
   """)
 
   // 시나리오 6: 조건문 타입 단일화
