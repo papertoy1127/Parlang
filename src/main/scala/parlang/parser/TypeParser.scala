@@ -16,6 +16,7 @@ trait TypeParser extends BaseParser {
   }
 
   protected lazy val tailType: Parser[Type] = positioned("*" ~> typeAtom ^^ Type.rep)
+
   protected lazy val typeBase: Parser[Type] = positioned {
     typeLiteral ^^ Type.single |
       "(" ~> eolOrNot ~> typeParser <~ eolOrNot <~ ")"
@@ -36,26 +37,26 @@ trait TypeParser extends BaseParser {
   protected lazy val exactTupleType: Parser[TypeAtom] => Parser[Type.Exact] =
     nextLayer => positioned {
       nextLayer ^^ Type.single |
-        "(" ~> eolOrNot ~> repsep(nextLayer | exactTupleType(nextLayer) ^^ { t => t.prefix.head }, ",") <~ opt(",") <~ eolOrNot <~ ")" ^^ {
-          t => Type.Exact(Nil)
+        "(" ~> eolOrNot ~> repsep(exactTupleType(nextLayer), ",") <~ opt(",") <~ eolOrNot <~ ")" ^^ {
+          t => Type.Exact(t.flatMap(_.prefix))
         }
     }
 
   protected lazy val restTupleType: Parser[TypeAtom] => Parser[Type] =
     nextLayer => positioned {
-      "(" ~> eolOrNot ~> rep((nextLayer | exactTupleType(nextLayer).map(_.prefix.head)) <~ ",") ~ restTupleType(nextLayer) <~ eolOrNot <~ ")"
-        ^^ { case tList ~ tRest => Type.of(tList ++ tRest.prefix, tRest.rest) } |
+      "(" ~> eolOrNot ~> rep(exactTupleType(nextLayer) <~ ",") ~ restTupleType(nextLayer) <~ eolOrNot <~ ")"
+        ^^ { case tList ~ tRest => Type.of(tList.flatMap(_.prefix) ++ tRest.prefix, tRest.rest) } |
         tailType
     }
 
   protected lazy val tupleType: Parser[TypeAtom] => Parser[Type] = nextLayer =>
     positioned {
       "(" ~> eolOrNot ~> (
-        rep( (nextLayer | exactTupleType(nextLayer).map(_.prefix.head)) <~ "," ) ~ restTupleType(nextLayer) ^^ {
-          case pref ~ ty => Type.of(pref ++ ty.prefix, ty.rest)
+        rep(exactTupleType(nextLayer) <~ ",") ~ restTupleType(nextLayer) ^^ {
+          case pref ~ ty => Type.of(pref.flatMap(_.prefix) ++ ty.prefix, ty.rest)
         } |
-          repsep(nextLayer | exactTupleType(nextLayer).map(_.prefix.head), ",") ^^ {
-            parts => Type.Exact(parts)
+          repsep(exactTupleType(nextLayer), ",") <~ opt(",") ^^ {
+            parts => Type.Exact(parts.flatMap(_.prefix))
           }
         ) <~ eolOrNot <~ ")" |
         nextLayer ^^ Type.single
